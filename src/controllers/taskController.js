@@ -38,14 +38,22 @@ export const createTask = asyncHandler(async (req, res) => {
 // READ (my tasks)
 
 export const getMyTasks = asyncHandler(async (req, res) => {
+  const { search, status } = req.query;
   const page = req.query.page || 1;
   const limit = req.query.limit || 10;
   const skip = (page - 1) * limit;
 
   let query = { userId: req.user._id };
 
-  if (req.query.status) {
-    query.status = req.query.status;
+  if (search) {
+    query.$or = [
+      { title: { $regex: search, $options: 'i' } },
+      { description: { $regex: search, $options: 'i' } },
+    ];
+  }
+
+  if (status && status !== 'ALL') {
+    query.status = status;
   }
 
   const totalTasks = await Task.countDocuments(query);

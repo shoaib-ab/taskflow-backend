@@ -1,4 +1,4 @@
-import mongoose, { mongo } from 'mongoose';
+import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema(
   {
@@ -19,6 +19,11 @@ const userSchema = new mongoose.Schema(
       required: true,
       minLength: 6,
       select: false,
+    },
+    auth0Id: {
+      type: String,
+      unique: true,
+      sparse: true, // Allow nulls for non-social users
     },
   },
   { timestamps: true },

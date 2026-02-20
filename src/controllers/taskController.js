@@ -39,11 +39,12 @@ export const createTask = asyncHandler(async (req, res) => {
 
 export const getMyTasks = asyncHandler(async (req, res) => {
   const { search, status } = req.query;
-  const page = req.query.page || 1;
-  const limit = req.query.limit || 10;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
 
   let query = { userId: req.user._id };
+  console.log('GetTasks Query:', query);
 
   if (search) {
     query.$or = [

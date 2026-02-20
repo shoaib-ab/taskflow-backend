@@ -10,11 +10,22 @@ const protect = asyncHandler(async (req, res, next) => {
   }
 
   const token = authHeader.split(' ')[1];
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('Decoded Token:', decoded);
 
-  req.user = await User.findById(decoded.id).select('-password');
+    req.user = await User.findById(decoded.id).select('-password');
+    console.log('Found User:', req.user);
 
-  next();
+    if (!req.user) {
+      return res.status(401).json({ message: 'User not found in database' });
+    }
+
+    next();
+  } catch (error) {
+    console.error('JWT Verification Error:', error.message);
+    return res.status(401).json({ message: 'Not authorized, token failed' });
+  }
 });
 
 export default protect;

@@ -20,10 +20,11 @@ app.use('/api/tasks', taskRoutes);
 // Global error handler
 
 app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({
-    message: 'Internal Server Error',
-    error: err.message || 'Server Error',
+  console.error('Global Error Handler:', err);
+  const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  res.status(statusCode).json({
+    message: err.message || 'Internal Server Error',
+    stack: process.env.NODE_ENV === 'production' ? null : err.stack,
   });
 });
 export default app;

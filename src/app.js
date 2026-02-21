@@ -1,12 +1,22 @@
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import authRoutes from './routes/authRoutes.js';
 import taskRoutes from './routes/taskRoutes.js';
+
 const app = express();
 
 // Middleware
-app.use(cors());
+// credentials:true is required so the browser sends cookies on cross-origin requests.
+// Replace the origin value with your actual frontend URL in production.
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    credentials: true, // Allow cookies to be sent with cross-origin requests
+  }),
+);
 app.use(express.json());
+app.use(cookieParser()); // Parse Cookie header and populate req.cookies
 
 // Test Route
 app.get('/', (req, res) => {

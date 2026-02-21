@@ -1,30 +1,42 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
-
 import asyncHandler from '../utils/asyncHandler.js';
 
+/**
+ * protect middleware
+ *
+ * Reads the access token from the httpOnly cookie set during login/register.
+ * If the token is missing or invalid the request is rejected with 401.
+ * When the access token is expired the client should call POST /api/auth/refresh
+ * to get a new pair before retrying the original request.
+ */
 const protect = asyncHandler(async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Not authorized, no token' });
+  const token = req.cookies?.accessToken;
+
+  if (!token) {
+    return res.status(401).json({ message: 'Not authorized, no access token' });
   }
 
-  const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log('Decoded Token:', decoded);
+    const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
 
     req.user = await User.findById(decoded.id).select('-password');
-    console.log('Found User:', req.user);
 
     if (!req.user) {
-      return res.status(401).json({ message: 'User not found in database' });
+      return res.status(401).json({ message: 'User not found' });
     }
 
     next();
   } catch (error) {
-    console.error('JWT Verification Error:', error.message);
-    return res.status(401).json({ message: 'Not authorized, token failed' });
+    // Distinguish between an expired token and a tampered one so the client
+    // knows whether a refresh attempt is worth making.
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        message: 'Access token expired',
+        code: 'TOKEN_EXPIRED',
+      });
+    }
+    return res.status(401).json({ message: 'Not authorized, token invalid' });
   }
 });
 

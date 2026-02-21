@@ -20,6 +20,12 @@ const userSchema = new mongoose.Schema(
       minLength: 6,
       select: false,
     },
+    // Stores the current valid refresh token (allows single-device invalidation / rotation)
+    refreshToken: {
+      type: String,
+      default: null,
+      select: false, // Never returned in normal queries
+    },
     auth0Id: {
       type: String,
       unique: true,

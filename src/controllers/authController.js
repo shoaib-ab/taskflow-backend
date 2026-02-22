@@ -9,10 +9,14 @@ import asyncHandler from '../utils/asyncHandler.js';
  * Generates a short-lived access token (15 minutes).
  * This token is used to authenticate every protected API request.
  */
-const generateAccessToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_ACCESS_SECRET, {
-    expiresIn: '15m',
-  });
+const generateAccessToken = (user) => {
+  return jwt.sign(
+    { id: user._id, role: user.role },
+    process.env.JWT_ACCESS_SECRET,
+    {
+      expiresIn: '15m',
+    },
+  );
 };
 
 /**
@@ -42,7 +46,7 @@ const cookieOptions = {
  * persists the refresh token in the database (enables rotation & revocation).
  */
 const attachTokens = async (res, user) => {
-  const accessToken = generateAccessToken(user._id);
+  const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken(user._id);
 
   // Persist hashed refresh token in DB so we can validate & rotate it
@@ -67,6 +71,7 @@ const attachTokens = async (res, user) => {
 // ─── Controllers ──────────────────────────────────────────────────────────────
 
 // POST /api/auth/register
+// the response should include role in the user objectFit:
 export const register = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
 
@@ -89,7 +94,12 @@ export const register = asyncHandler(async (req, res) => {
 
   res.status(201).json({
     message: 'User registered successfully',
-    user: { id: user._id, name: user.name, email: user.email },
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    },
   });
 });
 
@@ -118,7 +128,7 @@ export const login = asyncHandler(async (req, res) => {
 
   res.json({
     message: 'Login successful',
-    user: { id: user._id, name: user.name, email: user.email },
+    user: { id: user._id, name: user.name, email: user.email, role: user.role },
   });
 });
 
@@ -183,6 +193,79 @@ export const getMe = asyncHandler(async (req, res) => {
   // req.user is populated by the protect middleware
   const user = req.user;
   res.json({
-    user: { id: user._id, name: user.name, email: user.email },
+    user: { id: user._id, name: user.name, email: user.email, role: user.role },
   });
+});
+
+// PATCH /api/auth/profile  (protected)
+export const updateProfile = asyncHandler(async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) {
+    return res.status(400).json({ message: 'Name is required' });
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    { name: name.trim() },
+    { new: true, runValidators: true },
+  );
+
+  res.json({
+    message: 'Profile updated successfully',
+    user: { id: user._id, name: user.name, email: user.email, role: user.role },
+  });
+});
+
+// PATCH /api/auth/password  (protected)
+export const updatePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword, confirmPassword } = req.body;
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    return res
+      .status(400)
+      .json({ message: 'All password fields are required' });
+  }
+  if (newPassword !== confirmPassword) {
+    return res.status(400).json({ message: 'New passwords do not match' });
+  }
+  if (newPassword.length < 6) {
+    return res
+      .status(400)
+      .json({ message: 'New password must be at least 6 characters' });
+  }
+
+  const user = await User.findById(req.user._id).select('+password');
+  const isMatch = await bcrypt.compare(currentPassword, user.password);
+  if (!isMatch) {
+    return res.status(401).json({ message: 'Current password is incorrect' });
+  }
+
+  user.password = await bcrypt.hash(newPassword, 10);
+  await user.save();
+
+  res.json({ message: 'Password updated successfully' });
+});
+
+// DELETE /api/auth/account  (protected)
+export const deleteAccount = asyncHandler(async (req, res) => {
+  const { password } = req.body;
+
+  if (!password) {
+    return res
+      .status(400)
+      .json({ message: 'Password confirmation is required' });
+  }
+
+  const user = await User.findById(req.user._id).select('+password');
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) {
+    return res.status(401).json({ message: 'Password is incorrect' });
+  }
+
+  await user.deleteOne();
+
+  res.clearCookie('accessToken', cookieOptions);
+  res.clearCookie('refreshToken', cookieOptions);
+
+  res.json({ message: 'Account deleted successfully' });
 });

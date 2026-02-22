@@ -27,6 +27,27 @@ const taskSchema = new mongoose.Schema(
       public_id: String,
       url: String,
     },
+    assignedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+      index: true,
+    },
+    teamId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Team',
+      default: null,
+      index: true,
+    },
+    priority: {
+      type: String,
+      enum: ['low', 'medium', 'high'],
+      default: 'medium',
+    },
+    dueDate: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true },
 );

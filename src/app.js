@@ -3,6 +3,8 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import authRoutes from './routes/authRoutes.js';
 import taskRoutes from './routes/taskRoutes.js';
+import teamRoutes from './routes/teamRoutes.js';
+import userRoutes from './routes/userRoutes.js';
 
 const app = express();
 
@@ -26,6 +28,8 @@ app.get('/', (req, res) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/teams', teamRoutes);
+app.use('/api/users', userRoutes);
 
 // Global error handler
 

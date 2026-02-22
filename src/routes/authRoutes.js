@@ -5,18 +5,24 @@ import {
   logout,
   refresh,
   getMe,
+  updateProfile,
+  updatePassword,
+  deleteAccount,
 } from '../controllers/authController.js';
 import protect from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 // Public routes
-router.post('/register', register); // Create account → sets cookies
-router.post('/login', login); // Sign in       → sets cookies
-router.post('/refresh', refresh); // Rotate tokens using refresh-token cookie
-router.post('/logout', logout); // Clear cookies + invalidate refresh token in DB
+router.post('/register', register);
+router.post('/login', login);
+router.post('/refresh', refresh);
+router.post('/logout', logout);
 
-// Protected route (requires valid access token cookie)
-router.get('/me', protect, getMe); // Get current user profile
+// Protected routes
+router.get('/me', protect, getMe);
+router.patch('/profile', protect, updateProfile);
+router.patch('/password', protect, updatePassword);
+router.delete('/account', protect, deleteAccount);
 
 export default router;

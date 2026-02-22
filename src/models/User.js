@@ -31,6 +31,11 @@ const userSchema = new mongoose.Schema(
       unique: true,
       sparse: true, // Allow nulls for non-social users
     },
+    role: {
+      type: String,
+      enum: ['member', 'manager', 'admin'],
+      default: 'member',
+    },
   },
   { timestamps: true },
 );

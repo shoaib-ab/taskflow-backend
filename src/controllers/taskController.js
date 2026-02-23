@@ -49,38 +49,40 @@ export const getMyTasks = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
-  let query = {};
+  const filters = [];
 
   // Role-based scoping
   if (req.user.role === 'member') {
-    query = { assignedTo: req.user._id };
+    filters.push({ assignedTo: req.user._id });
   } else if (req.user.role === 'manager') {
-    // Fetch the teams this manager owns, then scope to those teamIds
+    // Tasks in manager's teams OR tasks created directly by the manager
     const myTeams = await Team.find({ manager: req.user._id }).select('_id');
     const teamIds = myTeams.map((t) => t._id);
-    query = { teamId: { $in: teamIds } };
+    filters.push({
+      $or: [{ teamId: { $in: teamIds } }, { userId: req.user._id }],
+    });
   }
-  // admin → query stays {} (sees everything)
-
-  console.log('GetTasks Query:', query);
+  // admin → no scope filter (sees everything)
 
   if (search) {
-    query.$or = [
-      { title: { $regex: search, $options: 'i' } },
-      { description: { $regex: search, $options: 'i' } },
-    ];
+    filters.push({
+      $or: [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+      ],
+    });
   }
 
   if (status && status !== 'ALL') {
-    query.status = status;
+    filters.push({ status });
   }
+
+  const query = filters.length > 0 ? { $and: filters } : {};
 
   const totalTasks = await Task.countDocuments(query);
 
   const tasks = await Task.find(query)
-    .sort({
-      createdAt: -1,
-    })
+    .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit);
 
@@ -102,34 +104,40 @@ export const getAllTasks = asyncHandler(async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
 
-  let query = {};
+  const filters = [];
 
   // Data scoping ONLY
   if (req.user.role === 'manager') {
-    // Fetch the teams this manager owns, then scope to those teamIds
+    // Tasks in manager's teams OR tasks created directly by the manager
     const myTeams = await Team.find({ manager: req.user._id }).select('_id');
     const teamIds = myTeams.map((t) => t._id);
-    query = { teamId: { $in: teamIds } };
+    filters.push({
+      $or: [{ teamId: { $in: teamIds } }, { userId: req.user._id }],
+    });
   }
-  // admin → query remains {}
+  // admin → no scope filter (sees everything)
 
   // Search filter
   if (search) {
-    query.$or = [
-      { title: { $regex: search, $options: 'i' } },
-      { description: { $regex: search, $options: 'i' } },
-    ];
+    filters.push({
+      $or: [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+      ],
+    });
   }
 
   // Status filter
   if (status && status !== 'ALL') {
-    query.status = status;
+    filters.push({ status });
   }
 
   // Member filter
   if (assignedTo) {
-    query.assignedTo = assignedTo;
+    filters.push({ assignedTo });
   }
+
+  const query = filters.length > 0 ? { $and: filters } : {};
 
   const totalTasks = await Task.countDocuments(query);
 
@@ -186,7 +194,27 @@ export const getTaskById = asyncHandler(async (req, res) => {
 export const updateTask = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { title, description, status, priority, dueDate } = req.body;
-  const task = await Task.findOne({ _id: id, userId: req.user._id });
+
+  // Build lookup query based on role
+  let findQuery;
+  if (req.user.role === 'admin') {
+    findQuery = { _id: id };
+  } else if (req.user.role === 'manager') {
+    const myTeams = await Team.find({ manager: req.user._id }).select('_id');
+    const teamIds = myTeams.map((t) => t._id);
+    findQuery = {
+      _id: id,
+      $or: [{ userId: req.user._id }, { teamId: { $in: teamIds } }],
+    };
+  } else {
+    // member: can update tasks they created OR that are assigned to them
+    findQuery = {
+      _id: id,
+      $or: [{ userId: req.user._id }, { assignedTo: req.user._id }],
+    };
+  }
+
+  const task = await Task.findOne(findQuery);
 
   if (!task) {
     return res.status(404).json({ message: 'Task not found' });
@@ -237,7 +265,11 @@ export const deleteTask = asyncHandler(async (req, res) => {
       $or: [{ userId: req.user._id }, { teamId: { $in: teamIds } }],
     });
   } else {
-    task = await Task.findOne({ _id: id, userId: req.user._id });
+    // member: can delete tasks they created OR that are assigned to them
+    task = await Task.findOne({
+      _id: id,
+      $or: [{ userId: req.user._id }, { assignedTo: req.user._id }],
+    });
   }
 
   if (!task) {

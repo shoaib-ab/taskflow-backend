@@ -35,10 +35,14 @@ const generateRefreshToken = (userId) => {
  * sameSite  → CSRF protection (use 'none' + secure:true in production cross-origin setups).
  * secure    → only sent over HTTPS in production.
  */
+const isProduction = process.env.NODE_ENV === 'production';
 const cookieOptions = {
   httpOnly: true,
-  sameSite: 'strict',
-  secure: process.env.NODE_ENV === 'production',
+  // 'none' required for cross-origin (different domains in production).
+  // 'lax' is fine for same-origin local development.
+  sameSite: isProduction ? 'none' : 'lax',
+  // secure must be true when sameSite is 'none' — only sent over HTTPS
+  secure: isProduction,
 };
 
 /**

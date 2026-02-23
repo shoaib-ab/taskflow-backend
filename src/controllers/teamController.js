@@ -1,5 +1,6 @@
 import asyncHandler from '../utils/asyncHandler.js';
 import Team from '../models/Team.js';
+import User from '../models/User.js';
 import mongoose from 'mongoose';
 import Task from '../models/Task.js';
 // CREATE TEAM
@@ -30,7 +31,7 @@ export const createTeam = asyncHandler(async (req, res) => {
   });
 });
 
-// GET MY TEAMS
+// GET MY TEAMS (manager / admin)
 
 export const getMyTeams = asyncHandler(async (req, res) => {
   let query = {};
@@ -50,17 +51,45 @@ export const getMyTeams = asyncHandler(async (req, res) => {
   });
 });
 
+// GET TEAMS I BELONG TO (member)
+
+export const getMemberTeams = asyncHandler(async (req, res) => {
+  const teams = await Team.find({ members: req.user._id })
+    .populate('manager', 'name email')
+    .populate('members', 'name email');
+
+  res.status(200).json({
+    success: true,
+    count: teams.length,
+    teams,
+  });
+});
+
 // ADD MEMBER TO TEAM
 
 export const addMember = asyncHandler(async (req, res) => {
   const { id: teamId } = req.params;
-  const { userId } = req.body;
+  const { userId, email } = req.body;
 
-  if (
-    !mongoose.Types.ObjectId.isValid(teamId) ||
-    !mongoose.Types.ObjectId.isValid(userId)
-  ) {
-    return res.status(400).json({ message: 'Invalid team or user ID' });
+  if (!mongoose.Types.ObjectId.isValid(teamId)) {
+    return res.status(400).json({ message: 'Invalid team ID' });
+  }
+
+  // Resolve the target user — accept ObjectId OR email string
+  let resolvedUserId = userId;
+
+  if (!mongoose.Types.ObjectId.isValid(resolvedUserId)) {
+    // Try to treat the value as an email (managers pass plain text)
+    const lookup = email || resolvedUserId;
+    const found = await User.findOne({
+      email: { $regex: new RegExp(`^${lookup}$`, 'i') },
+    }).select('_id');
+    if (!found) {
+      return res
+        .status(400)
+        .json({ message: 'No user found with that ID or email.' });
+    }
+    resolvedUserId = found._id;
   }
 
   const team = await Team.findById(teamId);
@@ -75,13 +104,16 @@ export const addMember = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'Forbidden: not team manager' });
   }
 
-  if (team.members.includes(userId)) {
+  const alreadyMember = team.members.some(
+    (m) => m.toString() === resolvedUserId.toString(),
+  );
+  if (alreadyMember) {
     return res
       .status(400)
       .json({ message: 'User is already a member of the team' });
   }
 
-  team.members.push(userId);
+  team.members.push(resolvedUserId);
   await team.save();
   await team.populate('manager', 'name email');
   await team.populate('members', 'name email');

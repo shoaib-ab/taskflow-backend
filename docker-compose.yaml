@@ -1,0 +1,41 @@
+services:
+  backend:
+    build:
+      context: .
+      target: development # uses the "development" stage from the Dockerfile
+    container_name: taskflow-backend
+    command: npm run dev # hot-reload via nodemon
+    restart: unless-stopped
+    ports:
+      - '5000:5000'
+    env_file:
+      - .env
+    environment:
+      # Override MONGO_URI so the backend reaches the mongo container by its service name.
+      # This takes precedence over the value in .env (which uses 127.0.0.1 for local dev).
+      - MONGO_URI=mongodb://mongo:27017/taskflow
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - .:/app # mount source code for live-reload
+      - /app/node_modules # keep the container's node_modules intact
+
+  mongo:
+    image: mongo:7
+    container_name: taskflow-mongo
+    restart: unless-stopped
+    ports:
+      - '27017:27017' # expose so you can connect via Compass on localhost
+    volumes:
+      - mongo_data:/data/db # persist data across container restarts
+    healthcheck:
+      test:
+        ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  mongo_data:

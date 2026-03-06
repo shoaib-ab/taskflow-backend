@@ -1,0 +1,62 @@
+name: CI/CD Pipeline
+
+# Triggers: runs on every push to main AND on every pull request targeting main
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # ─────────────────────────────────────────────
+  # JOB 1 — CI (Continuous Integration)
+  # Runs on every push and every PR
+  # ─────────────────────────────────────────────
+  ci:
+    name: CI — Install & Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Pull the code from GitHub
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up Node.js (same version as your Dockerfile)
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # 3. Install dependencies (clean install — faster and stricter than npm install)
+      - name: Install dependencies
+        run: npm ci
+
+      # 4. Security audit — fails the pipeline if HIGH or CRITICAL vulnerabilities found
+      - name: Security audit
+        run: npm audit --audit-level=high
+
+      # 5. Placeholder — add your real tests here when you write them
+      # - name: Run tests
+      #   run: npm test
+
+  # ─────────────────────────────────────────────
+  # JOB 2 — CD (Continuous Deployment)
+  # Runs ONLY after CI passes AND ONLY on push to main (not on PRs)
+  # ─────────────────────────────────────────────
+  cd:
+    name: CD — Deploy to Render
+    runs-on: ubuntu-latest
+    needs: ci                          # waits for CI job to succeed first
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      # Trigger Render to rebuild and redeploy the Docker container
+      - name: Deploy to Render
+        run: |
+          curl --silent --show-error --fail \
+            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
